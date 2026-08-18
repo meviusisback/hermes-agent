@@ -5522,17 +5522,10 @@ def _session_info(agent, session: dict | None = None) -> dict:
     )
     cfg_personality = ((_load_cfg().get("display") or {}).get("personality") or "")
     personality = (session or {}).get("personality", cfg_personality)
+    from hermes_constants import reasoning_effort_label
+
     reasoning_config = getattr(agent, "reasoning_config", None)
-    reasoning_effort = ""
-    if isinstance(reasoning_config, dict):
-        if reasoning_config.get("enabled") is False:
-            # Disabled must be distinguishable from unset ("" = provider
-            # default). Reporting "" here made the desktop adopt the empty
-            # value after the first turn, wiping its sticky "thinking off"
-            # pick and re-creating every later chat at the default effort.
-            reasoning_effort = "none"
-        else:
-            reasoning_effort = str(reasoning_config.get("effort", "") or "")
+    reasoning_effort = reasoning_effort_label(reasoning_config)
     service_tier = getattr(agent, "service_tier", None) or mirror.get("service_tier") or ""
     # Effective approval-bypass state — the same three sources that
     # check_all_command_guards() ORs together: persistent config
@@ -8359,14 +8352,24 @@ def _lazy_resume_info(
     model: str = "",
     provider: str = "",
     profile: str | None = None,
+    reasoning_config: dict | None = None,
 ) -> dict:
     """session.info for a not-yet-built session (the shape session.create
     returns). tools/skills land later when the deferred build emits session.info."""
+    from hermes_constants import reasoning_effort_label
+
+    resolved_model = model or _resolve_model()
+    resolved_reasoning_config = (
+        reasoning_config
+        if reasoning_config is not None
+        else _load_reasoning_config(resolved_model)
+    )
     info = {
         "cwd": cwd,
         "branch": _git_branch_for_cwd(cwd),
         "project": _project_info_for_cwd(cwd),
-        "model": model or _resolve_model(),
+        "model": resolved_model,
+        "reasoning_effort": reasoning_effort_label(resolved_reasoning_config),
         "tools": {},
         "skills": {},
         "lazy": True,
@@ -8634,12 +8637,25 @@ def _fallback_session_info(session: dict) -> dict:
     # repo) so a client can clear a stale label instead of retaining it — the
     # same contract `_lazy_session_info` above already follows.
     cwd = _session_cwd(session)
+    resume_overrides = session.get("resume_runtime_overrides") or {}
+    model_override = session.get("model_override") or resume_overrides.get("model_override") or {}
+    resolved_model = model_override.get("model") or _resolve_model()
+    reasoning_config = (
+        session.get("create_reasoning_override")
+        if session.get("create_reasoning_override") is not None
+        else resume_overrides.get("reasoning_config_override")
+    )
+    if reasoning_config is None:
+        reasoning_config = _load_reasoning_config(resolved_model)
+    from hermes_constants import reasoning_effort_label
+
     return {
         "cwd": cwd,
         "branch": _git_branch_for_cwd(cwd),
         "project": _project_info_for_cwd(cwd),
         "lazy": True,
-        "model": _resolve_model(),
+        "model": resolved_model,
+        "reasoning_effort": reasoning_effort_label(reasoning_config),
         "skills": {},
         "tools": {},
         # A lazy session (agent not built yet) is still served by *this* backend,

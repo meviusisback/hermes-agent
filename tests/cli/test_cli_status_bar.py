@@ -8,12 +8,13 @@ import cli as cli_mod
 from cli import HermesCLI
 
 
-def _make_cli(model: str = "anthropic/claude-sonnet-4-20250514"):
+def _make_cli(model: str = "anthropic/claude-sonnet-4-20250514", reasoning_config=None):
     cli_obj = HermesCLI.__new__(HermesCLI)
     cli_obj.model = model
     cli_obj.session_start = datetime.now() - timedelta(minutes=14, seconds=32)
     cli_obj.conversation_history = [{"role": "user", "content": "hi"}]
     cli_obj.agent = None
+    cli_obj.reasoning_config = reasoning_config
     return cli_obj
 
 
@@ -31,9 +32,11 @@ def _attach_agent(
     context_tokens: int,
     context_length: int,
     compressions: int = 0,
+    reasoning_config: dict | None = None,
 ):
     cli_obj.agent = SimpleNamespace(
         model=cli_obj.model,
+        reasoning_config=reasoning_config,
         provider="anthropic" if cli_obj.model.startswith("anthropic/") else None,
         base_url="",
         session_input_tokens=input_tokens if input_tokens is not None else prompt_tokens,
@@ -231,6 +234,57 @@ class TestCLIStatusBar:
 
 
 
+
+
+class TestStatusBarReasoning:
+    def test_unset_reasoning_is_hidden(self):
+        assert _make_cli()._reasoning_effort_label() == ""
+
+    def test_explicit_reasoning_and_disabled_reasoning_labels(self):
+        assert _make_cli(reasoning_config={"effort": "medium"})._reasoning_effort_label() == "medium"
+        assert _make_cli(reasoning_config={"enabled": False})._reasoning_effort_label() == "none"
+
+    def test_active_agent_reasoning_overrides_stale_cli_config(self):
+        cli_obj = _attach_agent(
+            _make_cli(reasoning_config={"effort": "high"}),
+            prompt_tokens=1,
+            completion_tokens=1,
+            total_tokens=2,
+            api_calls=1,
+            context_tokens=2,
+            context_length=200_000,
+            reasoning_config={"effort": "low"},
+        )
+        assert cli_obj._reasoning_effort_label() == "low"
+
+    def test_text_status_bar_shows_explicit_medium(self):
+        cli_obj = _attach_agent(
+            _make_cli(),
+            prompt_tokens=1,
+            completion_tokens=1,
+            total_tokens=2,
+            api_calls=1,
+            context_tokens=2,
+            context_length=200_000,
+            reasoning_config={"effort": "medium"},
+        )
+        assert "(medium)" in cli_obj._build_status_bar_text(width=120)
+
+    def test_fragments_status_bar_shows_explicit_medium(self):
+        cli_obj = _attach_agent(
+            _make_cli(),
+            prompt_tokens=1,
+            completion_tokens=1,
+            total_tokens=2,
+            api_calls=1,
+            context_tokens=2,
+            context_length=200_000,
+            reasoning_config={"effort": "medium"},
+        )
+        cli_obj._status_bar_visible = True
+        cli_obj._get_tui_terminal_width = lambda: 120
+        text = "".join(value for _style, value in cli_obj._get_status_bar_fragments())
+        assert "(medium)" in text
 
 
 class TestCLIUsageReport:

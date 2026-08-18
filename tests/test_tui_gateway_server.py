@@ -10587,6 +10587,19 @@ def test_session_info_reports_pending_model_switch(monkeypatch):
     assert server._session_info(agent, session)["model"] == "old/model"
 
 
+def test_session_info_reasoning_effort_labels_are_canonical():
+    agent = types.SimpleNamespace(
+        tools=[],
+        model="test/model",
+        provider="openai",
+        reasoning_config={"enabled": True, "effort": "MEDIUM"},
+    )
+    assert server._session_info(agent, {"history": []})["reasoning_effort"] == "medium"
+
+    agent.reasoning_config = {"enabled": False, "effort": "high"}
+    assert server._session_info(agent, {"history": []})["reasoning_effort"] == "none"
+
+
 def test_session_info_includes_turn_started_at():
     agent = types.SimpleNamespace(tools=[], model="", provider="")
     session = {
@@ -17056,6 +17069,7 @@ def test_session_create_records_ui_model_as_session_override(monkeypatch):
         # the client never clobbers its sticky pick before the build lands.
         assert resp["result"]["info"]["model"] == "claude-sonnet-4.6"
         assert resp["result"]["info"]["provider"] == "anthropic"
+        assert resp["result"]["info"]["reasoning_effort"] == "high"
 
         # Explicit false is not the same as omission: it must suppress a Fast
         # profile default for this session's first request.
@@ -18504,6 +18518,38 @@ def test_fallback_session_info_reports_session_cwd_not_launch_dir(monkeypatch):
 
     assert info["cwd"] == "/projects/session-own-repo"
     assert info["branch"] == "bb/feature"
+
+
+def test_fallback_session_info_preserves_reasoning_override(monkeypatch):
+    monkeypatch.setattr(server, "_resolve_model", lambda: "default-model")
+    info = server._fallback_session_info(
+        {
+            "cwd": "/projects/session-own-repo",
+            "model_override": {"model": "session-model"},
+            "resume_runtime_overrides": {
+                "reasoning_config_override": {"enabled": True, "effort": "HIGH"}
+            },
+        }
+    )
+    assert info["model"] == "session-model"
+    assert info["reasoning_effort"] == "high"
+
+
+def test_lazy_resume_info_uses_model_reasoning_fallback(monkeypatch):
+    monkeypatch.setattr(server, "_resolve_model", lambda: "default-model")
+    monkeypatch.setattr(
+        server,
+        "_load_reasoning_config",
+        lambda model: {"enabled": True, "effort": "MEDIUM"}
+        if model == "session-model"
+        else None,
+    )
+    info = server._lazy_resume_info(
+        "/projects/session-own-repo",
+        model="session-model",
+    )
+    assert info["model"] == "session-model"
+    assert info["reasoning_effort"] == "medium"
 
 
 def test_fallback_session_info_always_emits_branch(monkeypatch):

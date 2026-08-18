@@ -6020,6 +6020,17 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
             return "class:status-bar-warn"
         return "class:status-bar-dim"
 
+    def _reasoning_effort_label(self) -> str:
+        """Return the active session's canonical reasoning display label."""
+        from hermes_constants import reasoning_effort_label
+
+        agent = getattr(self, "agent", None)
+        if agent is not None and hasattr(agent, "reasoning_config"):
+            config = agent.reasoning_config
+        else:
+            config = getattr(self, "reasoning_config", None)
+        return reasoning_effort_label(config)
+
     def _build_context_bar(self, percent_used: Optional[int], width: int = 10) -> str:
         safe_percent = max(0, min(100, percent_used or 0))
         filled = round((safe_percent / 100) * width)
@@ -6103,6 +6114,7 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
         snapshot = {
             "model_name": model_name,
             "model_short": model_short,
+            "reasoning_label": self._reasoning_effort_label(),
             "duration": format_duration_compact(elapsed_seconds),
             "session_title": self._get_status_bar_session_title(),
             "prompt_elapsed": self._format_prompt_elapsed(
@@ -6860,6 +6872,10 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
 
             yolo_active = self._is_session_yolo_active()
             goal_segment = self._status_bar_goal_segment(snapshot)
+            reasoning_label = snapshot.get("reasoning_label") or ""
+            model_label = snapshot["model_short"]
+            if reasoning_label:
+                model_label = f"{model_label} ({reasoning_label})"
             if width < 52:
                 text = f"{battery_prefix}⚕ {snapshot['model_short']} · {duration_label}"
                 if goal_segment:
@@ -6870,7 +6886,7 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
                     text += " · ⚠ YOLO"
                 return self._right_align_status_title(text, session_title, width)
             if width < 76:
-                parts = [f"⚕ {snapshot['model_short']}", percent_label]
+                parts = [f"⚕ {model_label}", percent_label]
                 if battery_label:
                     parts.insert(0, battery_label)
                 compressions = snapshot.get("compressions", 0)
@@ -6902,7 +6918,7 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
                 context_label = "ctx --"
 
             compressions = snapshot.get("compressions", 0)
-            parts = [f"⚕ {snapshot['model_short']}", context_label, percent_label]
+            parts = [f"⚕ {model_label}", context_label, percent_label]
             if battery_label:
                 parts.insert(0, battery_label)
             if compressions:
@@ -6951,6 +6967,7 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
             battery_style = self._battery_status_style(snapshot.get("battery_category", "dim"))
             focus_label = snapshot.get("focus_label") or ""
             session_title = snapshot.get("session_title") or ""
+            reasoning_label = snapshot.get("reasoning_label") or ""
 
             if width < 52:
                 frags = [
@@ -6983,6 +7000,8 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
                         ("class:status-bar-dim", " · "),
                         (self._status_bar_context_style(percent), percent_label),
                     ]
+                    if reasoning_label:
+                        frags.insert(2, ("class:status-bar-dim", f" ({reasoning_label})"))
                     if compressions:
                         frags.append(("class:status-bar-dim", " · "))
                         frags.append((self._compression_count_style(compressions), f"🗜️ {compressions}"))
@@ -7032,6 +7051,8 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
                         ("class:status-bar-dim", " "),
                         (bar_style, percent_label),
                     ]
+                    if reasoning_label:
+                        frags.insert(2, ("class:status-bar-dim", f" ({reasoning_label})"))
                     if compressions:
                         frags.append(("class:status-bar-dim", " │ "))
                         frags.append((self._compression_count_style(compressions), f"🗜️ {compressions}"))

@@ -1184,6 +1184,21 @@ def parse_reasoning_effort(effort) -> dict | None:
     return None
 
 
+def reasoning_effort_label(reasoning_config: dict | None) -> str:
+    """Return the canonical display label for an explicit reasoning config.
+
+    Empty or malformed configuration means no explicit session-level effort
+    and returns ``""``. Explicitly disabled reasoning returns ``"none"`` so
+    clients can distinguish it from an unset provider default.
+    """
+    if not isinstance(reasoning_config, dict) or not reasoning_config:
+        return ""
+    if reasoning_config.get("enabled") is False:
+        return "none"
+    effort = str(reasoning_config.get("effort") or "").strip().lower()
+    return effort if effort in VALID_REASONING_EFFORTS else ""
+
+
 def _canonical_model_variants(model: str) -> list[str]:
     """Generate bounded spelling variants for tolerant override matching.
 

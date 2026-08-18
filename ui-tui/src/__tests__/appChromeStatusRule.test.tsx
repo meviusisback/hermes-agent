@@ -491,3 +491,23 @@ describe('StatusRule idle-since read-out', () => {
     expect(findComponentByName(element, 'IdleSince')).toBeNull()
   })
 })
+
+describe('StatusRule reasoning-effort label', () => {
+  it('shows explicit efforts including medium', () => {
+    for (const effort of ['high', 'medium', 'none']) {
+      const element = StatusRule({ ...baseProps, modelReasoningEffort: effort })
+      expect(textContent(element)).toContain(`opus 4.8 ${effort}`)
+    }
+  })
+
+  it('hides unset and legacy placeholder values', () => {
+    for (const effort of [undefined, '', 'default', 'normal']) {
+      const element = StatusRule({ ...baseProps, modelReasoningEffort: effort })
+      const rendered = textContent(element)
+      expect(rendered).toContain('opus 4.8')
+      expect(rendered).not.toContain('medium')
+      expect(rendered).not.toContain('default')
+      expect(rendered).not.toContain('normal')
+    }
+  })
+})

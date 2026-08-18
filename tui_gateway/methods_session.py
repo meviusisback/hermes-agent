@@ -125,6 +125,13 @@ def _(rid, params: dict) -> dict:
     _schedule_agent_build(sid)
     _schedule_session_cap_enforcement()  # trim detached idle sessions over the cap
 
+    from hermes_constants import reasoning_effort_label
+    reasoning_config = (
+        create_reasoning_override
+        if create_reasoning_override is not None
+        else _load_reasoning_config(create_model or _resolve_model())
+    )
+
     return _ok(
         rid,
         {
@@ -147,6 +154,7 @@ def _(rid, params: dict) -> dict:
                     if session_model_override and session_model_override.get("provider")
                     else {}
                 ),
+                "reasoning_effort": reasoning_effort_label(reasoning_config),
                 "tools": {},
                 "skills": {},
                 "cwd": _sessions[sid]["cwd"],
@@ -582,6 +590,7 @@ def _(rid, params: dict) -> dict:
                         model=model_override.get("model") or "",
                         provider=overrides.get("provider_override") or "",
                         profile=profile,
+                        reasoning_config=overrides.get("reasoning_config_override"),
                     ),
                     "inflight": None,
                     "running": False,
@@ -672,6 +681,7 @@ def _(rid, params: dict) -> dict:
                     model=model_override.get("model") or "",
                     provider=overrides.get("provider_override") or "",
                     profile=profile,
+                    reasoning_config=overrides.get("reasoning_config_override"),
                 ),
                 "inflight": None,
                 "running": False,
